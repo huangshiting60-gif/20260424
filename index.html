@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Sketch</title>
+
+    <link rel="stylesheet" type="text/css" href="style.css">
+
+    <!-- 改用官方 CDN 雲端連結載入 p5.js 與 p5.sound，保證絕對找得到檔案 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+    <style>
+      /* 定義遊樂園主題色彩變數 */
+      :root {
+        --powder-blush: #fec5bb;
+        --almond-silk: #fcd5ce;
+        --soft-blush: #fae1dd;
+        --seashell: #f8edeb;
+        --alabaster-grey: #e8e8e4;
+        --alabaster-grey-2: #d8e2dc;
+        --linen: #ece4db;
+        --powder-petal: #ffe5d9;
+        --peach-fuzz: #ffd7ba;
+        --peach-glow: #fec89a;
+      }
+      /* 左側快速選單樣式 */
+      #work-menu {
+        position: fixed; left: -200px; /* 一開始隱藏在畫面外 */
+        top: 50%; transform: translateY(-50%);
+        background: rgba(255, 255, 255, 0.85); padding: 20px 15px;
+        border-radius: 0 20px 20px 0; box-shadow: 5px 5px 25px rgba(254, 197, 187, 0.5);
+        backdrop-filter: blur(10px); border: 3px dashed var(--powder-blush); border-left: none;
+        z-index: 1000; display: flex; flex-direction: column; gap: 10px;
+        transition: left 0.8s cubic-bezier(0.25, 1, 0.5, 1); /* 平滑滑入特效 */
+      }
+      .work-btn {
+        padding: 10px 20px; background: var(--seashell);
+        border: 2px solid var(--powder-blush); border-radius: 30px;
+        color: #8a6b5d; font-weight: bold; cursor: pointer;
+        transition: all 0.2s ease; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+      .work-btn:hover {
+        background: var(--powder-blush); color: white; transform: scale(1.05);
+      }
+      .work-btn.active {
+        background: linear-gradient(to right, var(--peach-fuzz) 0%, var(--peach-glow) 100%);
+        border-color: #fff; color: #7b5858;
+        box-shadow: 0 4px 10px rgba(254, 200, 154, 0.6);
+      }
+      
+      /* 新增: 歡迎畫面樣式 */
+      #intro-screen {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        /* 大幅降低背景不透明度，並減少模糊，讓底下 p5.js 畫布的物件能透出來 */
+        background: linear-gradient(135deg, rgba(255, 229, 217, 0.4), rgba(255, 215, 186, 0.3));
+        backdrop-filter: blur(4px);
+        z-index: 2000; display: flex; justify-content: center; align-items: center;
+        perspective: 1000px; /* 新增：為 3D 動畫提供視角 */
+        transition: opacity 0.8s ease, visibility 0.8s;
+        overflow: hidden; /* 確保背景光暈不會產生捲軸 */
+      }
+
+      .intro-content {
+        position: relative; /* 新增：讓星星可以相對於卡片定位 */
+        text-align: center; color: #8a6b5d;
+        background: rgba(255, 255, 255, 0.75); padding: 50px 80px;
+        border-radius: 30px; box-shadow: 0 10px 40px rgba(200, 150, 150, 0.3);
+        border: 4px dashed var(--powder-blush);
+        transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        /* 組合動畫：先播放入場飛入，結束後無縫接續漂浮動畫 */
+        animation: ticketFlyIn 1.5s cubic-bezier(0.2, 1.2, 0.4, 1) forwards, floatCard 5s ease-in-out 1.5s infinite; 
+        font-family: 'Noto Serif TC', 'Songti TC', 'MingLiU', 'DFKai-SB', serif; /* 換上古典華麗的明體/宋體或楷體 */
+      }
+      #intro-screen.hidden .intro-content { 
+        animation: none; /* 隱藏時停止浮動，讓向上滑出的動畫接手 */
+        transform: translateY(-50px) scale(0.9); 
+      }
+      /* 新增：當卡片被點擊飛走時的動畫 */
+      .intro-content.fly-away {
+        /* 使用 ease-in-out 讓加速與減速更平滑，forwards 讓動畫停在最後一幀 */
+        animation: ticketFlyAway 1.2s cubic-bezier(0.45, 0, 0.55, 1) forwards;
+      }
+      .intro-content h1 { 
+        font-size: 3.2rem; 
+        margin-top: 0; 
+        margin-bottom: 25px; 
+        text-shadow: 2px 2px 8px rgba(138, 107, 93, 0.3); /* 讓標題有微微的魔法光暈 */
+        letter-spacing: 4px; /* 拉寬字距，增加大氣感 */
+      }
+      .intro-content p { 
+        font-size: 1.3rem; 
+        margin-bottom: 40px; 
+        line-height: 2.2; /* 讓行距更寬鬆優雅 */
+        min-height: 140px; /* 避免打字時版面跳動 */
+        vertical-align: top;
+        letter-spacing: 2px; /* 內文也拉寬字距 */
+      }
+      #start-btn {
+        font-family: 'Noto Serif TC', 'Songti TC', 'MingLiU', 'DFKai-SB', serif; /* 延續古典字體 */
+        font-size: 1.4rem; padding: 15px 50px; 
+        background: linear-gradient(180deg, #ffffff 0%, var(--seashell) 100%);
+        border: 1px solid #8a6b5d; border-radius: 50px;
+        color: #8a6b5d; cursor: pointer;
+        letter-spacing: 4px; /* 拉寬字距 */
+        transition: all 0.5s ease; 
+        /* 動畫由 JS 控制，先隱藏 */
+        opacity: 0;
+        transform: translateY(20px);
+        pointer-events: none;
+      }
+      #start-btn.visible {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+        animation: btnPulse 2s infinite; /* 動畫在可見時才啟動 */
+      }
+      #start-btn:hover { 
+        background: #8a6b5d; color: white; transform: scale(1.05); 
+        box-shadow: 0 8px 25px rgba(138, 107, 93, 0.4), inset 0 0 0 3px #8a6b5d, inset 0 0 0 4px rgba(255, 255, 255, 0.5) !important; /* 替換為華麗的雙層反白邊框 */
+        animation: none; /* 滑鼠移上時暫停撲通動畫 */
+      }
+      .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+      /* 打字機游標 */
+      .cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1.3rem;
+        background-color: #8a6b5d;
+        margin-left: 4px;
+        animation: blinkingCursor 0.7s infinite;
+        vertical-align: text-bottom;
+      }
+
+      /* 星星閃爍特效 */
+      .sparkle {
+        position: absolute;
+        pointer-events: none; /* 避免擋住滑鼠點擊 */
+        z-index: 10;
+        filter: drop-shadow(0 0 8px rgba(255, 215, 186, 0.8));
+        animation: twinkle 1.5s ease-in-out infinite alternate;
+      }
+
+      /* --- 新增：動態感動畫設定 --- */
+      @keyframes blinkingCursor {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+      @keyframes floatCard {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-12px); }
+        100% { transform: translateY(0px); }
+      }
+      @keyframes twinkle {
+        0% { opacity: 0.3; transform: scale(0.8) rotate(-10deg); }
+        100% { opacity: 1; transform: scale(1.2) rotate(10deg); }
+      }
+      @keyframes btnPulse {
+        0% { transform: scale(1); box-shadow: 0 4px 15px rgba(138, 107, 93, 0.2), inset 0 0 0 3px var(--seashell), inset 0 0 0 4px rgba(138, 107, 93, 0.4); }
+        50% { transform: scale(1.03); box-shadow: 0 8px 25px rgba(138, 107, 93, 0.5), inset 0 0 0 3px var(--seashell), inset 0 0 0 4px rgba(138, 107, 93, 0.6); }
+        100% { transform: scale(1); box-shadow: 0 4px 15px rgba(138, 107, 93, 0.2), inset 0 0 0 3px var(--seashell), inset 0 0 0 4px rgba(138, 107, 93, 0.4); }
+      }
+      /* 新增：帥氣的 3D 旋轉入場動畫 */
+      @keyframes ticketFlyIn {
+        0% {
+          transform: translateY(-800px) rotateY(-180deg) rotateZ(-30deg) scale(0.2);
+          opacity: 0;
+        }
+        100% {
+          transform: translateY(0) rotateY(0) rotateZ(0) scale(1);
+          opacity: 1;
+        }
+      }
+      /* 新增：帥氣的 3D 旋轉退場動畫 */
+      @keyframes ticketFlyAway {
+        0% {
+          transform: rotateY(0) rotateZ(0);
+          opacity: 1;
+        }
+        100% {
+          transform: rotateY(360deg) rotateZ(30deg) translateX(800px) translateY(-400px) scale(0.2);
+          opacity: 0;
+        }
+      }
+
+      /* 新增：離開按鈕獨立樣式 */
+      #exit-btn {
+        position: absolute; z-index: 100;
+        padding: 12px 25px; background: #8a6b5d; color: white;
+        border: 2px solid var(--powder-blush); border-radius: 30px;
+        font-family: 'Noto Serif TC', 'Songti TC', 'MingLiU', serif;
+        font-size: 1.1rem; font-weight: bold; cursor: pointer;
+        box-shadow: 0 4px 15px rgba(138, 107, 93, 0.4);
+        transition: all 0.3s ease;
+      }
+      #exit-btn:hover {
+        background: var(--powder-blush); color: #8a6b5d;
+        transform: scale(1.05); border-color: white;
+      }
+
+      /* 新增：結尾畫面樣式 (充滿靜謐的魔法氛圍) */
+      #outro-screen {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: linear-gradient(135deg, rgba(30, 30, 40, 0.8), rgba(10, 10, 15, 0.9));
+        backdrop-filter: blur(8px);
+        z-index: 2000; display: flex; justify-content: center; align-items: center;
+        transition: opacity 0.8s ease, visibility 0.8s; overflow: hidden;
+      }
+      .outro-content {
+        position: relative; text-align: center; color: #ece4db;
+        background: rgba(40, 35, 45, 0.85); padding: 50px 80px;
+        border-radius: 30px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        border: 4px dashed #8a6b5d; transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        font-family: 'Noto Serif TC', 'Songti TC', 'MingLiU', 'DFKai-SB', serif;
+      }
+      .outro-content h1 {
+        font-size: 3.2rem; margin-top: 0; margin-bottom: 25px;
+        text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8); letter-spacing: 4px;
+      }
+      .outro-content p {
+        font-size: 1.3rem; margin-bottom: 40px; line-height: 2.2;
+        min-height: 140px; vertical-align: top; letter-spacing: 2px;
+      }
+      #restart-btn {
+        font-family: 'Noto Serif TC', 'Songti TC', 'MingLiU', serif;
+        font-size: 1.4rem; padding: 15px 50px; background: linear-gradient(180deg, #4a3b32 0%, #2a231e 100%);
+        border: 1px solid #d8e2dc; border-radius: 50px; color: #d8e2dc; cursor: pointer; letter-spacing: 4px;
+        transition: all 0.5s ease; opacity: 0; transform: translateY(20px); pointer-events: none;
+      }
+      #restart-btn.visible {
+        opacity: 1; transform: translateY(0); pointer-events: auto;
+        animation: btnPulseOutro 2s infinite;
+      }
+      #restart-btn:hover {
+        background: #d8e2dc; color: #2a231e; transform: scale(1.05);
+        box-shadow: 0 8px 25px rgba(255, 255, 255, 0.2), inset 0 0 0 3px #2a231e, inset 0 0 0 4px rgba(255, 255, 255, 0.5) !important;
+        animation: none;
+      }
+      @keyframes btnPulseOutro {
+        0% { transform: scale(1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 0 0 3px #2a231e, inset 0 0 0 4px rgba(255, 255, 255, 0.2); }
+        50% { transform: scale(1.03); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6), inset 0 0 0 3px #2a231e, inset 0 0 0 4px rgba(255, 255, 255, 0.3); }
+        100% { transform: scale(1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 0 0 3px #2a231e, inset 0 0 0 4px rgba(255, 255, 255, 0.2); }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- 歡迎畫面 (入場券) -->
+    <div id="intro-screen">
+      <div class="intro-content">
+        <!-- 點綴周圍的閃爍星星 (加入不同的動畫延遲，讓閃爍錯開才自然) -->
+        <div class="sparkle" style="top: -20px; left: -20px; font-size: 2.2rem; animation-delay: 0s;">✨</div>
+        <div class="sparkle" style="top: 30px; right: -25px; font-size: 1.5rem; animation-delay: 0.7s;">✨</div>
+        <div class="sparkle" style="bottom: -20px; right: 10px; font-size: 2.5rem; animation-delay: 0.4s;">✨</div>
+        <div class="sparkle" style="bottom: 40px; left: -30px; font-size: 1.8rem; animation-delay: 1.1s;">✨</div>
+        <div class="sparkle" style="top: -30px; right: 50px; font-size: 1.3rem; animation-delay: 0.9s;">✨</div>
+
+        <h1>🎡 一封神秘的邀請函 📜</h1>
+        <p id="story-text"></p>
+        <button id="start-btn">✨ 開啟旅程</button>
+      </div>
+    </div>
+
+    <!-- 左側快速選單 -->
+    <div id="work-menu">
+      <div style="color: #d28c8c; font-weight: bold; margin-bottom: 5px; text-align: center; border-bottom: 2px dashed var(--powder-blush); padding-bottom: 10px;">快速選擇</div>
+    </div>
+
+    <!-- 結尾畫面 -->
+    <div id="outro-screen" class="hidden">
+      <div class="outro-content">
+        <div class="sparkle" style="top: -20px; left: -20px; font-size: 2.2rem; animation-delay: 0s;">✨</div>
+        <div class="sparkle" style="bottom: -20px; right: 10px; font-size: 2.5rem; animation-delay: 0.4s;">✨</div>
+        <h1>🌙 旅程的終點</h1>
+        <p id="outro-story-text"></p>
+        <button id="restart-btn">✨ 再次造訪</button>
+      </div>
+    </div>
+
+    <!-- 裝 p5.js 畫布的容器 -->
+    <div id="canvas-container" style="width: 100vw; height: 100vh; overflow: hidden;"></div>
+
+    <script src="sketch.js"></script>
+    <script>
+      const startBtn = document.getElementById('start-btn');
+      const introScreen = document.getElementById('intro-screen');
+      const storyElement = document.getElementById('story-text');
+
+      // 1. 按鈕點擊事件：點擊後隱藏歡迎畫面
+      startBtn.addEventListener('click', () => {
+        const introContent = document.querySelector('.intro-content');
+        introContent.classList.add('fly-away'); // 觸發卡片飛走動畫
+        // 讓背景在卡片飛到一半時才開始淡出，聚焦動畫本身
+        setTimeout(() => introScreen.classList.add('hidden'), 400);
+      });
+
+      // 2. 打字機效果
+      const storyLines = [
+        "在被遺忘的角落，有座只在夢中出現的遊樂園。",
+        "園區深處的扭蛋機，裝著通往不同奇幻世界的鑰匙...",
+        "", // 空行
+        "你，就是那位被選中的訪客。",
+        "準備好開啟你的旅程了嗎？"
+      ];
+      const fullStory = storyLines.join('<br>');
+      const speed = 85; // 調慢打字速度 (ms)，讓聲音間隔拉長
+      let i = 0;
+
+      function typeWriter() {
+        if (i < fullStory.length) {
+          // 處理 <br> 換行標籤
+          let segment = (fullStory.substring(i, i + 4) === '<br>') ? 4 : 1;
+          storyElement.innerHTML = fullStory.substring(0, i + segment) + '<span class="cursor"></span>';
+
+          i += segment;
+          setTimeout(typeWriter, speed);
+        } else {
+          // 打字結束，移除游標並顯示按鈕
+          storyElement.innerHTML = fullStory;
+          startBtn.classList.add('visible');
+        }
+      }
+
+      // 配合入場動畫的長度，等卡片飛入定位後再開始打字
+      setTimeout(typeWriter, 1500); 
+
+      // 3. 結尾劇情打字機邏輯
+      const outroScreen = document.getElementById('outro-screen');
+      const outroStoryElement = document.getElementById('outro-story-text');
+      const restartBtn = document.getElementById('restart-btn');
+      
+      const outroLines = [
+        "遊樂園的燈光漸漸暗下，",
+        "但那些奇幻的記憶，已經悄悄收進了你的口袋。",
+        "",
+        "期待下次在夢的交界處，",
+        "再次與你相遇..."
+      ];
+      const fullOutro = outroLines.join('<br>');
+      let outroIndex = 0;
+
+      function typeOutroWriter() {
+        if (outroIndex < fullOutro.length) {
+          let segment = (fullOutro.substring(outroIndex, outroIndex + 4) === '<br>') ? 4 : 1;
+          outroStoryElement.innerHTML = fullOutro.substring(0, outroIndex + segment) + '<span class="cursor"></span>';
+          outroIndex += segment;
+          setTimeout(typeOutroWriter, speed);
+        } else {
+          outroStoryElement.innerHTML = fullOutro;
+          restartBtn.classList.add('visible');
+        }
+      }
+
+      window.startOutroTypeWriter = function() {
+        if (outroIndex === 0) {
+          setTimeout(typeOutroWriter, 500); 
+        }
+      }
+
+      // 重新開始按鈕：點擊後隱藏結尾卡片，讓玩家可以繼續互動
+      restartBtn.addEventListener('click', () => {
+        outroScreen.classList.add('hidden');
+        restartBtn.classList.remove('visible');
+        outroStoryElement.innerHTML = '';
+        outroIndex = 0;
+      });
+    </script>
+  </body>
+</html>
